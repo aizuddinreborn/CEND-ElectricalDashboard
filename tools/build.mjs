@@ -25,6 +25,8 @@ const wrap = JSON.parse(readFileSync(join(root, 'keywrap.json'), 'utf8'));
 
 // 1. page: each <script> of the dashboard runs in its own scope, as it does in Claude
 let page = readFileSync(join(src, 'page.html'), 'utf8');
+// the 3D model link opens this site's own locked copy, in the same tab (so one sign-in covers it)
+page = page.replace(/href="https:\/\/claude\.ai\/artifact\/W1J8eZVtE8sRwzXQcGoWPn"\s+target="_blank"\s+rel="noopener"/g, 'href="./generator/"');
 page = page.replace(/<script>([\s\S]*?)<\/script>/g, (m, body) => `<script>(() => {\n${body}\n})();</script>`);
 
 // 2. data
