@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>Electrical Dashboard · HLEP SJ Chenderoh</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap">
+<style>
+  :root { color-scheme: dark; --font-anthropic-sans: "Inter"; --color-fg-muted: #8796ab; --color-bad: #ff6b6b; --cds-dur-slow: 420ms; --cds-font-size-caption: 12px; }
+  html, body { margin: 0; background: #03060c; }
+  body { -webkit-font-smoothing: antialiased; }
+  #dash-root { padding: 20px clamp(12px, 2.4vw, 32px) 40px; max-width: 1640px; margin: 0 auto; box-sizing: border-box; }
+  .dash-skeleton { display: inline-block; min-width: 4em; height: .9em; border-radius: 4px; background: rgba(255, 255, 255, .07); vertical-align: middle; color: transparent !important; }
+  .cend-out { position: fixed; right: 14px; bottom: 14px; z-index: 100; appearance: none; border: 1px solid rgba(136, 176, 255, .18); background: rgba(8, 13, 24, .9); color: #aab7c9; font: 12px/1 ui-monospace, Menlo, monospace; letter-spacing: .08em; text-transform: uppercase; padding: 8px 12px; border-radius: 999px; cursor: pointer; }
+  .cend-out:hover { color: #e9f0f8; border-color: rgba(72, 201, 255, .5); }
+</style>
+<script>/*__D3__*/</script>
+<script>window.__CEND_DATA = /*__DATA__*/;</script>
+<script>/*__SHIM__*/</script>
+</head>
+<body>
+<div id="dash-root">
+<!--__PAGE__-->
+</div>
+<button class="cend-out" type="button" id="cend-out" title="Lock this dashboard and forget the password on this device">Lock</button>
+<script>
+document.getElementById('cend-out').addEventListener('click', () => {
+  try { localStorage.removeItem('cend-key'); sessionStorage.removeItem('cend-key'); } catch (e) { /* ignore */ }
+  location.reload();
+});
+</script>
+</body>
+</html>

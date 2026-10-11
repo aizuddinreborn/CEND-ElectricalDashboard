@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>Electrical Dashboard · Locked</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; background: #03060c; color: #e9f0f8; font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; -webkit-font-smoothing: antialiased; }
+  body { min-height: 100vh; display: grid; place-items: center; padding: 24px 16px;
+    background: radial-gradient(900px 600px at 20% -10%, rgba(47, 128, 255, .16), transparent 60%), radial-gradient(700px 500px at 110% 110%, rgba(72, 201, 255, .10), transparent 60%), #03060c; }
+  .card { width: min(420px, 100%); padding: 32px 28px 26px; border-radius: 18px; border: 1px solid rgba(136, 176, 255, .16); background: linear-gradient(rgba(255,255,255,.03), rgba(255,255,255,.01)), #070c16; box-shadow: 0 30px 80px rgba(0, 0, 0, .5); }
+  .logo { width: 44px; height: 44px; filter: drop-shadow(0 0 12px rgba(72, 201, 255, .5)); }
+  .eyebrow { margin: 18px 0 6px; font: 11px/1.6 ui-monospace, "SF Mono", Menlo, Consolas, monospace; letter-spacing: .18em; text-transform: uppercase; color: #6f7f95; }
+  .eyebrow b { color: #e9f0f8; font-weight: 600; }
+  h1 { margin: 0 0 22px; font-size: 26px; font-weight: 300; letter-spacing: -.02em; line-height: 1.2; }
+  label { display: block; font: 11px/1 ui-monospace, Menlo, monospace; letter-spacing: .14em; text-transform: uppercase; color: #8796ab; margin-bottom: 8px; }
+  .pw { position: relative; }
+  input[type="password"], input[type="text"] { width: 100%; padding: 13px 44px 13px 14px; font-size: 16px; color: #e9f0f8; background: #03060c; border: 1px solid rgba(136, 176, 255, .22); border-radius: 10px; outline: none; }
+  input:focus { border-color: #48c9ff; box-shadow: 0 0 0 3px rgba(72, 201, 255, .18); }
+  .eye { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); appearance: none; border: 0; background: none; color: #8796ab; cursor: pointer; padding: 8px; }
+  .row { display: flex; align-items: center; gap: 8px; margin: 14px 0 20px; font-size: 13.5px; color: #aab7c9; }
+  .row input { width: 16px; height: 16px; accent-color: #48c9ff; }
+  button.go { width: 100%; appearance: none; border: 0; border-radius: 10px; padding: 13px; font-size: 15px; font-weight: 600; color: #03111c; background: linear-gradient(180deg, #6fd6ff, #2fa8ff); cursor: pointer; }
+  button.go:disabled { opacity: .6; cursor: progress; }
+  .msg { min-height: 20px; margin: 12px 0 0; font-size: 13.5px; color: #ff8f8f; }
+  .foot { margin: 18px 0 0; font-size: 12px; color: #5f6e83; line-height: 1.5; }
+  .boot { display: none; text-align: center; color: #8796ab; font: 12px ui-monospace, Menlo, monospace; letter-spacing: .14em; text-transform: uppercase; }
+  .booting .card { display: none; } .booting .boot { display: block; }
+</style>
+</head>
+<body>
+<form class="card" id="f" autocomplete="on">
+  <svg class="logo" viewBox="-20 -20 40 40" aria-hidden="true"><defs><linearGradient id="g" x1="0" y1="-20" x2="0" y2="20" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#a6e6ff"/><stop offset="1" stop-color="#2f80ff"/></linearGradient></defs><circle r="18" fill="none" stroke="url(#g)" stroke-width="1.4"/><circle r="13.5" fill="none" stroke="rgba(72,201,255,.4)" stroke-width="1" stroke-dasharray="1.4 2.6"/><g fill="none" stroke="url(#g)" stroke-width="1.8" stroke-linecap="round"><path d="M0 -3.2C3.5 -7 8 -8.6 11.6 -6.8"/><path d="M0 -3.2C3.5 -7 8 -8.6 11.6 -6.8" transform="rotate(60)"/><path d="M0 -3.2C3.5 -7 8 -8.6 11.6 -6.8" transform="rotate(120)"/><path d="M0 -3.2C3.5 -7 8 -8.6 11.6 -6.8" transform="rotate(180)"/><path d="M0 -3.2C3.5 -7 8 -8.6 11.6 -6.8" transform="rotate(240)"/><path d="M0 -3.2C3.5 -7 8 -8.6 11.6 -6.8" transform="rotate(300)"/></g><circle r="2.6" fill="#48c9ff"/></svg>
+  <p class="eyebrow"><b>HLEP · SJ Chenderoh</b> / Electrical</p>
+  <h1>Resident Engineer<br>Progress View</h1>
+  <input type="text" name="username" value="cend-dashboard" autocomplete="username" hidden>
+  <label for="pw">Password</label>
+  <div class="pw"><input id="pw" type="password" autocomplete="current-password" required autofocus><button class="eye" type="button" id="eye" aria-label="Show password">●</button></div>
+  <div class="row"><input type="checkbox" id="remember"><label for="remember" style="all:unset;cursor:pointer">Keep me signed in on this device</label></div>
+  <button class="go" id="go" type="submit">Open dashboard</button>
+  <p class="msg" id="msg" role="alert"></p>
+  <p class="foot">Restricted to the HLEP SJ Chenderoh project team. The contents are encrypted and open only with the team password.</p>
+</form>
+<div class="boot" id="boot">Decrypting…</div>
+<script id="cend-box" type="application/json">/*__BOX__*/</script>
+<script>
+(() => {
+  const BOX = JSON.parse(document.getElementById('cend-box').textContent);
+  const te = new TextEncoder(), td = new TextDecoder();
+  const b64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+  const toB64 = (u) => btoa(String.fromCharCode(...u));
+  const $ = (id) => document.getElementById(id);
+  async function unwrap(pw) {
+    const base = await crypto.subtle.importKey('raw', te.encode(pw), 'PBKDF2', false, ['deriveKey']);
+    const kek = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt: b64(BOX.salt), iterations: BOX.iter, hash: 'SHA-256' }, base, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
+    return new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b64(BOX.wrapIv) }, kek, b64(BOX.wrapped)));
+  }
+  async function open(raw) {
+    const key = await crypto.subtle.importKey('raw', raw, 'AES-GCM', false, ['decrypt']);
+    const gz = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b64(BOX.iv) }, key, b64(BOX.ct));
+    const html = await new Response(new Blob([gz]).stream().pipeThrough(new DecompressionStream('gzip'))).text();
+    document.open(); document.write(html); document.close();
+  }
+  const store = (raw, keep) => { try { (keep ? localStorage : sessionStorage).setItem('cend-key', toB64(raw)); } catch (e) { /* ignore */ } };
+  const saved = () => { try { return localStorage.getItem('cend-key') || sessionStorage.getItem('cend-key'); } catch (e) { return null; } };
+  const forget = () => { try { localStorage.removeItem('cend-key'); sessionStorage.removeItem('cend-key'); } catch (e) { /* ignore */ } };
+  if (!window.crypto || !crypto.subtle || !window.DecompressionStream) { $('msg').textContent = 'This browser is too old to open the dashboard. Please use a current Chrome, Edge, Safari or Firefox.'; $('go').disabled = true; return; }
+  const s = saved();
+  if (s) { document.body.classList.add('booting'); open(b64(s)).catch(() => { forget(); document.body.classList.remove('booting'); }); }
+  $('eye').addEventListener('click', () => { const p = $('pw'); p.type = p.type === 'password' ? 'text' : 'password'; });
+  $('f').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const pw = $('pw').value; if (!pw) return;
+    $('go').disabled = true; $('msg').textContent = ''; $('go').textContent = 'Checking…';
+    let raw;
+    try { raw = await unwrap(pw); } catch (err) { $('msg').textContent = 'Wrong password. Please try again.'; $('go').disabled = false; $('go').textContent = 'Open dashboard'; $('pw').select(); return; }
+    store(raw, $('remember').checked);
+    document.body.classList.add('booting');
+    try { await open(raw); } catch (err) { forget(); document.body.classList.remove('booting'); $('msg').textContent = 'The dashboard could not be opened. Reload the page and try again.'; $('go').disabled = false; $('go').textContent = 'Open dashboard'; }
+  });
+})();
+</script>
+</body>
+</html>
