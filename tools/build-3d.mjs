@@ -32,6 +32,10 @@ let page = readFileSync(join(src, 'page.html'), 'utf8');
 // three.js from this site instead of the CDN
 page = must(page, 'https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.min.js', '../vendor/three/build/three.module.min.js');
 page = must(page, 'https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/', '../vendor/three/examples/jsm/');
+// the start-up guard's messages: the engine now comes from this site, not the CDN
+page = page.replace("t.src.indexOf('cdn.jsdelivr.net')", "t.src.indexOf('/vendor/three/')");
+page = page.replace(/from cdn\.jsdelivr\.net\. Check the internet connection \(some office networks block this site\)/g, 'from this website. Check the internet connection');
+page = page.replace(/It comes from cdn\.jsdelivr\.net and has not arrived/g, 'It has not arrived');
 // the model comes from the encrypted model.bin
 page = must(page, 'const res = await fetch(MODEL_URL);', 'const res = await window.__cendModel();');
 page = must(page, '<script type="importmap">', `<script>
