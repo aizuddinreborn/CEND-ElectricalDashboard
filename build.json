@@ -1,5 +1,5 @@
 {
-  "built_at": "2026-10-22T01:12:00+08:00",
+  "built_at": "2026-10-22T01:22:00+08:00",
   "page_version": 12,
   "datasets": {
     "activities": 2,
@@ -10,7 +10,7 @@
     "lookaheads": 2,
     "packages": 2,
     "reliability": 2,
-    "site_checks": 6,
-    "sync_log": 36
+    "site_checks": 7,
+    "sync_log": 37
   }
 }
