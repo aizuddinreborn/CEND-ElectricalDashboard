@@ -7,15 +7,25 @@ The Resident Engineer Progress View for HLEP · SJ Chenderoh electrical works: a
 - **Today's activities** tab: lists what the latest lookahead plans for the day, with one-tap **Done / Pending / Hold** site checks. It also lists what was planned earlier in the fortnight and still needs a check, shows the two-week chart, and has a search to find any activity.
 - **Activity panel**: open any activity (from Today, the search, the runway or the chase list) to record a site check with a date and note, or clear it. The panel also shows the plan history across lookaheads.
 - **Add activity**: add work that isn't in the ANDRITZ lookaheads, such as another contractor's scope. You can edit it, mark it done or delete it later.
-- **Upload lookahead**: being finished (it needs a sample workbook).
+- **Upload lookahead**: choose the contractor's two-week lookahead workbook (.xlsx) as it is. The website reads it in the browser, links each row to the activity it continues, and shows a review screen before anything is saved (see below).
 - **Settings** (gear icon, bottom right): your name, the GitHub token that turns on editing, the Gemini key, and the recent changes.
+
+## Uploading a lookahead
+
+1. **Today's activities → Upload lookahead**, then choose or drop the .xlsx file.
+2. The reader takes the electrical sheets: **EPS, GEN, AUTOMATION, PH Crane U4**, and the electrical rooms and fire-water pump electrical work on **FIRE FIGHTING**. A sheet whose dates are for another week (for example a hidden, older AUTOMATION sheet) is left out and listed.
+3. Each row is linked to the activity it continues, by section, component heading (R01–R08, Rotor Body / Fan / Assembly) and wording. A remark on a component heading (for example "Ready for Transportation") is copied to every row under it, marked "(whole component)".
+4. **Gemini** (if a key is set in Settings) checks the rows that didn't match word for word, in case an activity was renamed, and sorts new remarks into constraint types. Gemini only suggests; a confident rename is pre-linked and marked "linked by Gemini".
+5. On the review screen you can link any row to a tracked activity, add it as new, or leave it out, and set the type of each new remark. **Save** writes the lookahead for everyone. Uploading the same week again replaces it.
+
+The reader was checked by replaying the CW43–44 workbook onto the CW42 data: the result matched the earlier tracker exactly (103 rows continued, 13 new, every slip, rollover, status, constraint and plan-reliability figure the same).
 
 ## How it's protected
 
 Everything is encrypted with AES-256-GCM before it reaches this public repository:
 - `index.html` is the app.
 - `data/state.enc` holds the progress data.
-- `data/secrets.enc` holds the GitHub token and Gemini key.
+- `data/secrets.enc` holds the GitHub token and the Gemini key.
 
 The team password unlocks them in the browser (PBKDF2-SHA256, 600,000 rounds). No project data is committed in plain text.
 
@@ -45,6 +55,10 @@ The token is a fine-grained personal access token with only **Contents: Read and
 | `app/datasets.js` | Turns the saved data into the dashboard's tables |
 | `app/store.js` | Encryption, loading, and saving through the GitHub API |
 | `app/ui.js`, `app/ui.css` | Today's activities, the activity panel, forms and settings |
+| `app/xlsx-lite.js` | Reads .xlsx workbooks in the browser (no outside library) |
+| `app/lookahead.js` | Turns a lookahead workbook into rows and links them to tracked activities |
+| `app/gemini.js` | Asks Gemini about renamed activities and new remarks |
+| `app/upload.js` | The upload and review screens |
 | `tools/build.mjs` | Builds `index.html` from the dashboard page and the app files; needs `CEND_KEY` |
 | `tools/seal.mjs` | Encrypts or decrypts a data file; needs `CEND_KEY` |
 | `tools/setkey.mjs` | Sets or changes the password and writes `keywrap.json` |

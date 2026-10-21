@@ -52,6 +52,8 @@
       const l = lookByCw.get(cw); const y0 = Number((l ? l.start : LSTART).slice(0, 4));
       let s = `${y0}-${md}`; if (l && D(s) < D(l.start) - 60 * DAY) s = `${y0 + 1}-${md}`; return s;
     };
+    const RC = model.remark_cats || {};      // categories confirmed on upload (AI-suggested or edited) win over the patterns
+    const catOf = (t) => (Object.prototype.hasOwnProperty.call(RC, t) ? RC[t] : categorise(t));
     const acts = model.acts.map((a0) => {
       const a = { ...a0, o: a0.o.map((o) => [o[0], [...o[1]], [...o[2]]]).sort((x, y) => x[0] - y[0]) };
       const obs = a.o;
@@ -78,7 +80,7 @@
       for (const o of obs) for (const t of o[2]) { const c = doneFromRemark(t, year); if (c) comp = { ...c, cw: o[0], text: t }; }
       const cur = obs.find((o) => o[0] === LATEST);
       const inLatestDated = !!(cur && cur[1].length);
-      const curCons = cur ? cur[2].filter((t) => categorise(t)) : [];
+      const curCons = cur ? cur[2].filter((t) => catOf(t)) : [];
       let st, d = null;
       if (a.done && a.done.date && !(inLatestDated && a.done.cw && a.done.cw < LATEST)) { st = 'Completed'; d = a.done.date; }
       else if (comp && !inLatestDated) { st = 'Completed'; d = comp.date || a.lf; }
@@ -99,7 +101,7 @@
     for (const a of acts) {
       const byCat = new Map();
       for (const o of a.o) for (const t of o[2]) {
-        const cat = categorise(t); if (!cat) continue;
+        const cat = catOf(t); if (!cat) continue;
         if (!byCat.has(cat)) byCat.set(cat, { act: a.id, pkg: a.p, cat, texts: [], first: o[0], last: o[0] });
         const c = byCat.get(cat); if (!c.texts.includes(t)) c.texts.push(t); c.last = Math.max(c.last, o[0]); c.first = Math.min(c.first, o[0]);
       }
@@ -125,7 +127,7 @@
       }
       ppc.push({ w: L.cw, next: N.cw, planned, kept, pct: planned ? Math.round(100 * kept / planned) : null, slipped, byp });
     }
-    return { meta: { ...model.meta, latest: LATEST, latest_start: latest.start, latest_end: latest.end }, pk: model.pk, acts, cons, ppc };
+    return { meta: { ...model.meta, latest: LATEST, latest_start: latest.start, latest_end: latest.end }, pk: model.pk, acts, cons, ppc, remark_cats: RC };
   }
 
   root.CEND_MODEL = { derive, categorise, doneFromRemark, CATS };

@@ -157,3 +157,43 @@ html.cend-lock, html.cend-lock body { overflow: hidden; }
 .cend-gear { position: fixed; right: 84px; bottom: 14px; z-index: 100; appearance: none; width: 34px; height: 34px; display: grid; place-items: center; border: 1px solid rgba(136, 176, 255, .18); background: rgba(8, 13, 24, .9); color: #aab7c9; border-radius: 999px; cursor: pointer; }
 .cend-gear:hover { color: #e9f0f8; border-color: rgba(72, 201, 255, .5); }
 .cend-gear .cend-ic svg { stroke: currentColor; fill: none; stroke-width: 1.5; }
+
+/* lookahead upload */
+.cend-drawer.cend-wide { width: min(1000px, 100%); }
+.hx .cend-drop { position: relative; display: grid; justify-items: center; gap: 6px; padding: 34px 18px; border-radius: 16px; border: 1.5px dashed rgba(72, 201, 255, .45); background: rgba(72, 201, 255, .04); text-align: center; cursor: pointer; color: var(--ink); }
+.hx .cend-drop:hover, .hx .cend-drop.is-over { border-color: var(--cyan); background: rgba(72, 201, 255, .09); }
+.hx .cend-drop:focus-within { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.hx .cend-drop b { font-weight: 500; font-size: 15px; }
+.cend-drop-ic { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; border: 1px solid rgba(72, 201, 255, .45); color: var(--cyan); }
+.cend-drop-ic .cend-ic, .cend-drop-ic .cend-ic svg { width: 20px; height: 20px; }
+.cend-file { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
+.cend-ul { margin: 0; padding-left: 18px; display: grid; gap: 5px; font-size: 13px; color: var(--ink-2); }
+.cend-ul b { color: var(--ink); font-weight: 500; }
+.cend-up-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 760px) { .cend-up-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.cend-up-tiles .cend-fact b { font-size: 22px; font-weight: 300; }
+.cend-up-tiles .cend-fact.is-new { border-color: rgba(72, 201, 255, .45); }
+.hx .cend-ai { margin: 0; display: flex; align-items: center; gap: 9px; padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line-2); background: rgba(255, 255, 255, .025); font-size: 13px; color: var(--ink-2); }
+.cend-ai i { flex: none; width: 8px; height: 8px; border-radius: 50%; background: #b48cff; box-shadow: 0 0 10px #b48cff; }
+.cend-ai.is-done i { background: var(--mint); box-shadow: 0 0 10px var(--mint); }
+@media (prefers-reduced-motion: no-preference) { .cend-ai.is-busy i { animation: cend-pulse 1s ease-in-out infinite alternate; } @keyframes cend-pulse { from { opacity: .3; } to { opacity: 1; } } }
+.cend-up-list { display: grid; gap: 8px; }
+.cend-up-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, 300px); gap: 10px 16px; align-items: center; padding: 11px 12px 11px 14px; border-radius: 14px; border: 1px solid var(--line); background: rgba(255, 255, 255, .022); }
+.cend-up-row.is-skip { opacity: .6; }
+@media (max-width: 680px) { .cend-up-row { grid-template-columns: minmax(0, 1fr); } }
+.cend-up-main { display: grid; gap: 4px; min-width: 0; }
+.cend-up-t { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: baseline; font-size: 14px; color: var(--ink); line-height: 1.3; }
+.cend-up-t b { font-weight: 500; }
+.cend-up-link { font-size: 13px; color: var(--ink); }
+.cend-up-sug { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; font-size: 12.5px; color: var(--ink-2); }
+.cend-up-sug .cend-chip { padding: 4px 10px; font-size: 12px; }
+.hx .cend-up-act select.cend-in { font-size: 13px; padding: 8px 10px; }
+.hx .cend-tag.is-ai { color: #d6c2ff; border-color: rgba(180, 140, 255, .5); }
+.cend-up-det { border: 1px solid var(--line); border-radius: 14px; padding: 10px 14px; background: rgba(255, 255, 255, .015); }
+.cend-up-det summary { cursor: pointer; font-size: 14px; font-weight: 500; color: var(--ink); }
+.cend-up-det[open] summary { margin-bottom: 10px; }
+.cend-up-det .cend-ul { gap: 3px; }
+.cend-up-same { display: grid; gap: 8px; }
+.cend-dfoot { padding: 14px 22px 16px; border-top: 1px solid var(--line); background: #070c16; }
+.cend-up-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+html.cend-lock .cend-gear, html.cend-lock .cend-out { display: none; }

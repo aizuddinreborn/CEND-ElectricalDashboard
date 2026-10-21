@@ -36,7 +36,7 @@ const stat = {};
 const sdir = join(src, 'static');
 if (existsSync(sdir)) for (const f of readdirSync(sdir).filter((n) => n.endsWith('.json')).sort()) stat[f.replace(/\.json$/, '')] = JSON.parse(readFileSync(join(sdir, f), 'utf8'));
 const safe = (s) => s.replace(/<\/(script)/gi, '<\\/$1').replace(/<!--/g, '<\\!--');
-const app = ['model.js', 'datasets.js', 'store.js', 'upload.js', 'ui.js'].filter((f) => existsSync(join(root, 'app', f)))
+const app = ['model.js', 'datasets.js', 'store.js', 'xlsx-lite.js', 'lookahead.js', 'gemini.js', 'ui.js', 'upload.js'].filter((f) => existsSync(join(root, 'app', f)))
   .map((f) => `<script>${safe(readFileSync(join(root, 'app', f), 'utf8'))}</script>`).join('\n');
 
 const shell = readFileSync(join(here, 'page-shell.html'), 'utf8');

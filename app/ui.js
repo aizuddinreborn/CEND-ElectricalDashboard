@@ -191,7 +191,7 @@
   btnNext.addEventListener('click', () => { DAYSEL = addD(DAYSEL || today(), 1); renderToday(); });
   btnToday.addEventListener('click', () => { DAYSEL = null; renderToday(); });
   btnAdd.addEventListener('click', () => openForm(null));
-  btnUp.addEventListener('click', () => { if (window.CEND_UPLOAD) window.CEND_UPLOAD.open(); else toast('Uploading a lookahead is being finished: Claude needs one sample workbook to build the reader.', 'bad'); });
+  btnUp.addEventListener('click', () => { if (window.CEND_UPLOAD) window.CEND_UPLOAD.open(); else toast('The lookahead reader did not load. Reload the page and try again.', 'bad'); });
   btnSet.addEventListener('click', () => openSettings());
   let qT = 0;
   q.addEventListener('input', () => { clearTimeout(qT); qT = setTimeout(renderSearch, 120); });
@@ -291,11 +291,14 @@
   const drawer = h('aside', { class: 'cend-drawer', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'cend-dt', hidden: true });
   const dCrumb = h('div', 'cend-dcrumb'), dTitle = h('h2', { class: 'cend-dtitle', id: 'cend-dt' }), dStatus = h('div', 'cend-dstatus'), dBody = h('div', 'cend-dbody');
   const dClose = h('button', { class: 'cend-dclose', type: 'button', 'aria-label': 'Close' }, '×');
-  drawer.append(h('div', 'cend-dhead', dCrumb, dTitle, dStatus, dClose), dBody);
+  const dFoot = h('div', { class: 'cend-dfoot', hidden: true });
+  drawer.append(h('div', 'cend-dhead', dCrumb, dTitle, dStatus, dClose), dBody, dFoot);
   ROOT.append(scrim, drawer, toastEl);
   let lastFocus = null;
-  function openDrawer() {
+  function openDrawer(wide) {
     if (drawer.hidden) lastFocus = document.activeElement;
+    drawer.classList.toggle('cend-wide', !!wide);
+    if (!wide) { dFoot.hidden = true; dFoot.replaceChildren(); }
     scrim.hidden = false; drawer.hidden = false; document.documentElement.classList.add('cend-lock');
     requestAnimationFrame(() => dClose.focus());
   }
@@ -303,9 +306,31 @@
     CUR = null; scrim.hidden = true; drawer.hidden = true; document.documentElement.classList.remove('cend-lock');
     if (lastFocus && lastFocus.focus) lastFocus.focus();
   }
-  dClose.addEventListener('click', closeDrawer);
-  scrim.addEventListener('click', closeDrawer);
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !drawer.hidden) closeDrawer(); });
+  dClose.addEventListener('click', () => { if (!CUR || !CUR.onClose || CUR.onClose() !== false) closeDrawer(); });
+  scrim.addEventListener('click', () => dClose.click());
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !drawer.hidden) dClose.click(); });
+  /* A general panel for other parts of the site (the lookahead upload). setBody keeps the scroll position. */
+  ui.panel = (o) => {
+    CUR = { type: o.type || 'panel', onClose: o.onClose || null };
+    dCrumb.replaceChildren(h('span', null, o.crumb || ''));
+    dTitle.textContent = o.title || '';
+    dStatus.replaceChildren(...(o.status || []));
+    dBody.replaceChildren(...(o.body || []));
+    dBody.scrollTop = 0;
+    dFoot.replaceChildren(...(o.foot || [])); dFoot.hidden = !(o.foot && o.foot.length);
+    openDrawer(o.wide);
+    const me = CUR;
+    return {
+      body: dBody, status: dStatus,
+      live: () => CUR === me && !drawer.hidden,
+      setStatus: (nodes) => { if (CUR === me) dStatus.replaceChildren(...nodes); },
+      setBody: (nodes) => { if (CUR !== me) return; const y = dBody.scrollTop; dBody.replaceChildren(...nodes); dBody.scrollTop = y; },
+      setFoot: (nodes) => { if (CUR !== me) return; dFoot.replaceChildren(...nodes); dFoot.hidden = !nodes.length; },
+      close: () => { if (CUR === me) closeDrawer(); },
+    };
+  };
+  ui.closePanel = closeDrawer;
+  Object.assign(ui, { h, icon, toast, fmt, fmtW, pkName, plural, clone, name, today, D, addD });
   function rerenderDrawer() {
     if (!CUR) return;
     if (CUR.type === 'act') { const a = B.byId.get(CUR.id) || B.byKey.get(CUR.key); if (a) renderAct(a); else closeDrawer(); }
@@ -444,6 +469,8 @@
     openDrawer();
   }
   ui.openForm = openForm;
+  ui.askName = () => askName();
+  ui.showToday = (on) => showToday(on !== false);
 
   // ---------------------------------------------------------------- name prompt
   function askName() {
@@ -483,7 +510,7 @@
       finally { tokSave.disabled = false; }
     });
     // gemini
-    const gk = h('input', { class: 'cend-in', type: 'password', placeholder: sec.gemini_key ? 'A key is set. Paste a new one to replace it.' : 'AIza…', autocomplete: 'off', spellcheck: 'false' });
+    const gk = h('input', { class: 'cend-in', type: 'password', placeholder: sec.gemini_key ? 'A key is set. Paste a new one to replace it.' : 'Paste the Gemini API key', autocomplete: 'off', spellcheck: 'false' });
     const gMsg = h('span', 'cend-msg', { role: 'status' });
     const gSave = h('button', { class: 'cend-btn', type: 'button' }, sec.gemini_key ? 'Replace key' : 'Save key');
     gSave.addEventListener('click', async () => {
