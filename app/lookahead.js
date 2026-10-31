@@ -38,8 +38,16 @@
     return clean(raw).toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
   }
 
-  /* sheets: [{name, hidden, rows: Map(row -> Map(col -> value))}] as CEND_XLSX.read gives. */
-  function parse(sheets, fileName) {
+  /* A name for a section the rules don't track, e.g. "Fire Fighting – Unit 4" for "SITE ACTIVITIES - UNIT 4". */
+  const cap = (t) => clean(t).toLowerCase().split(' ').map((w) => (/\d/.test(w) ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1))).join(' ');
+  const outName = (sheet, raw) => `${cap(sheet)} – ${cap(clean(raw).replace(/^site\s+activit(y|ies)\s*[-–:]?\s*/i, '')) || cap(raw)}`;
+  const secKeyOf = (p, sheet, raw) => `${p}|${norm(sheet)}|${norm(raw)}`;
+
+  /* sheets: [{name, hidden, rows: Map(row -> Map(col -> value))}] as CEND_XLSX.read gives.
+     opts.secs: sections the team chose to track or not ({key: {track, name}}, saved in model.meta.secs).
+     Rows in sections that aren't tracked are kept with out:true, so the review screen can offer them. */
+  function parse(sheets, fileName, opts = {}) {
+    const secRules = opts.secs || {};
     const out = { file: fileName || '', packages: [], skipped: [], cw: null, start: null, end: null, problems: [] };
     const weeks = new Map();
     for (const sh of sheets) {
@@ -81,22 +89,30 @@
         for (const [c, v] of cells) if (c > lastDay && c >= remCol && typeof v === 'string') rem += (rem ? '; ' : '') + clean(v);
         lines.push({ r, text, numStr, isNumStr: typeof rawNum === 'string', isWhole, days, rem });
       }
-      let sec = null, secRaw = '';
+      let sec = null, secRaw = '', secKey = '', isOut = false;
       const stack = [];   // [{num, text, rem}]
       for (let i = 0; i < lines.length; i++) {
         const L = lines[i];
-        if (L.isWhole && !L.days.length) { secRaw = L.text; sec = mapSec(conf.p, L.text); stack.length = 0; continue; }
+        if (L.isWhole && !L.days.length) {
+          secRaw = L.text; secKey = secKeyOf(conf.p, sh.name, L.text); stack.length = 0;
+          const mapped = mapSec(conf.p, L.text), rule = secRules[secKey];
+          if (rule && rule.track === false) { sec = mapped || outName(sh.name, L.text); isOut = true; }
+          else if (mapped) { sec = mapped; isOut = false; }
+          else if (rule && rule.track && rule.name) { sec = rule.name; isOut = false; }
+          else { sec = outName(sh.name, L.text); isOut = true; }
+          continue;
+        }
         if (/^nil\.?$/i.test(L.text) || /^inspection according/i.test(L.text)) continue;
         while (stack.length && !L.numStr.startsWith(stack[stack.length - 1].num + '.')) stack.pop();
         const next = lines[i + 1];
         const isHeader = !L.days.length && L.numStr && next && next.numStr.startsWith(L.numStr + '.');
         if (isHeader) { stack.push({ num: L.numStr, text: L.text, rem: L.rem }); continue; }
         if (!sec) continue;
-        if (conf.p === 'ROOMS' && sec === 'Fire Water Pump House' && !FWP_ELEC.test(L.text)) continue;
+        if (conf.p === 'ROOMS' && sec === 'Fire Water Pump House' && !isOut && !FWP_ELEC.test(L.text)) continue;
         const remarks = [];
         if (L.rem) remarks.push(L.rem);
         for (const hd of stack) if (hd.rem) remarks.push(`${hd.rem} (whole component)`);
-        pkg.rows.push({ sec, secRaw, path: stack.map((s) => s.text), text: L.text, days: L.days, remarks, row: L.r });
+        pkg.rows.push({ sec, secRaw, secKey, out: isOut, path: stack.map((s) => s.text), text: L.text, days: L.days, remarks, row: L.r });
       }
       weeks.set(sh.name, cw);
       out.packages.push(pkg);
@@ -150,31 +166,41 @@
     return { sub: exact || last, group: (a) => !a.sub || a.sub === exact };
   }
 
-  /* Link each parsed row to an existing activity. Returns a plan the review screen edits. */
+  /* The activity a row continues: same wording first, then near-identical wording (typos). */
+  function matchOne(acts, p, row, used) {
+    const { sub, group } = subFor(p, row.path, acts);
+    const pool = acts.filter((a) => a.p === p && (!row.sec || a.sec === row.sec) && group(a));
+    const names = (a) => [a.n, ...(a.al || [])];
+    let hit = null, how = null, score = 0;
+    const exact = pool.filter((a) => !used.has(a.id) && names(a).some((t) => norm(t) === norm(row.text)));
+    if (exact.length) { hit = exact.sort((x, y) => (y.o.length ? y.o[y.o.length - 1][0] : 0) - (x.o.length ? x.o[x.o.length - 1][0] : 0))[0]; how = 'same wording'; score = 1; }
+    if (!hit) {
+      let best = null, bs = 0;
+      for (const a of pool) if (!used.has(a.id)) for (const t of names(a)) { const s = sim(t, row.text); if (s > bs) { bs = s; best = a; } }
+      if (best && bs >= 0.88) { hit = best; how = 'typo'; score = bs; }
+    }
+    if (hit) used.add(hit.id);
+    return { sub, match: hit ? hit.id : null, how, score };
+  }
+
+  /* Link each parsed row to an existing activity. Returns a plan the review screen edits.
+     Rows in sections that aren't tracked are listed with out:true and skip:true, and not matched. */
   function match(model, parsed) {
-    const acts = model.acts;
     const used = new Set();
     const plan = { cw: parsed.cw, start: parsed.start, end: parsed.end, file: parsed.file, rows: [], replaces: model.meta.lookaheads.some((l) => l.cw === parsed.cw) };
     for (const pkg of parsed.packages) for (const row of pkg.rows) {
-      const { sub, group } = subFor(pkg.p, row.path, acts);
-      const pool = acts.filter((a) => a.p === pkg.p && (!row.sec || a.sec === row.sec) && group(a));
-      const names = (a) => [a.n, ...(a.al || [])];
-      let hit = null, how = null, score = 0;
-      // 1. same wording (ignoring case, spaces and punctuation)
-      const exact = pool.filter((a) => !used.has(a.id) && names(a).some((t) => norm(t) === norm(row.text)));
-      if (exact.length) { hit = exact.sort((x, y) => (y.o.length ? y.o[y.o.length - 1][0] : 0) - (x.o.length ? x.o[x.o.length - 1][0] : 0))[0]; how = 'same wording'; score = 1; }
-      // 2. near-identical wording (typos)
-      if (!hit) {
-        let best = null, bs = 0;
-        for (const a of pool) if (!used.has(a.id)) for (const t of names(a)) { const s = sim(t, row.text); if (s > bs) { bs = s; best = a; } }
-        if (best && bs >= 0.88) { hit = best; how = 'typo'; score = bs; }
-      }
-      if (hit) used.add(hit.id);
-      plan.rows.push({ p: pkg.p, sheet: pkg.sheet, sec: row.sec, sub, path: row.path, text: row.text, days: row.days, remarks: row.remarks, row: row.row,
-        match: hit ? hit.id : null, how, score, suggest: null });
+      const base = { p: pkg.p, sheet: pkg.sheet, sec: row.sec, secRaw: row.secRaw, secKey: row.secKey, path: row.path, text: row.text, days: row.days, remarks: row.remarks, row: row.row, suggest: null };
+      if (row.out) { plan.rows.push({ ...base, sub: '', match: null, how: null, score: 0, out: true, skip: true }); continue; }
+      plan.rows.push({ ...base, ...matchOne(model.acts, pkg.p, row, used) });
     }
-    // activities that were in the previous lookahead and are missing now (for the review screen, and for AI suggestions)
     return plan;
+  }
+
+  /* Bring rows into the plan (a section the team chose to track): match them against activities not yet linked. */
+  function matchRows(model, plan, rows) {
+    const used = new Set(plan.rows.filter((r) => !r.skip && r.match != null).map((r) => r.match));
+    for (const r of rows) { Object.assign(r, matchOne(model.acts, r.p, r, used), { out: false, skip: false }); }
+    return rows;
   }
 
   /* Candidates the AI may link an unmatched row to: same package, not already linked, seen recently. */
@@ -210,8 +236,9 @@
     // activities that came back with new dates after being completed lose the old completion mark
     for (const a of model.acts) if (a.done && a.o.some((o) => o[0] > (a.done.cw || 0) && o[1].length)) delete a.done;
     model.remark_cats = { ...(model.remark_cats || {}), ...(plan.remark_cats || {}) };
+    if (plan.secs && Object.keys(plan.secs).length) model.meta.secs = { ...(model.meta.secs || {}), ...plan.secs };
     return { added, linked };
   }
 
-  root.CEND_LOOK = { parse, match, apply, candidatesFor, norm, sim, isoWeek, SHEETS };
+  root.CEND_LOOK = { parse, match, matchRows, apply, candidatesFor, norm, sim, isoWeek, SHEETS };
 })(typeof window !== 'undefined' ? window : globalThis);

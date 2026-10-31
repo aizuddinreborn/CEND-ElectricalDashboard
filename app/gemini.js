@@ -1,7 +1,9 @@
-/* Gemini (Google AI Studio key) for the lookahead upload. Two small questions, both answered as JSON:
+/* Gemini (Google AI Studio key).
+   For the lookahead upload, two small questions answered as JSON (Gemini only suggests; everything is
+   shown on the review screen before anything is saved):
    - which new rows are reworded versions of activities already tracked,
    - which constraint type a new remark is.
-   Gemini only suggests: everything it says is shown on the review screen before anything is saved. */
+   For the chat assistant, a streamed answer from the dashboard data (read-only). */
 (function (root) {
   'use strict';
   const BASE = 'https://generativelanguage.googleapis.com/v1beta';
@@ -23,15 +25,17 @@
     } finally { clearTimeout(t); }
     const txt = await r.text();
     let j = null; try { j = JSON.parse(txt); } catch (e) { /* not JSON */ }
-    if (!r.ok) {
-      const msg = (j && j.error && j.error.message) || txt.slice(0, 160);
-      const keyProblem = r.status === 401 || r.status === 403 || (r.status === 400 && /api[ _-]?key|credential|auth/i.test(msg));
-      const e = new Error(keyProblem ? `Google did not accept the Gemini key: ${msg}`
-        : r.status === 429 ? 'Gemini is busy or the key’s quota is used up. Try again in a minute.'
-        : `Gemini answered ${r.status}: ${msg}`);
-      e.status = r.status; e.keyProblem = keyProblem; throw e;
-    }
+    if (!r.ok) throw apiErr(r.status, j, txt);
     return j || {};
+  }
+  function apiErr(status, j, txt) {
+    const msg = (j && j.error && j.error.message) || String(txt || '').slice(0, 160);
+    const keyProblem = status === 401 || status === 403 || (status === 400 && /api[ _-]?key|credential|auth/i.test(msg));
+    const e = new Error(keyProblem ? `Google did not accept the Gemini key: ${msg}`
+      : status === 429 ? 'Gemini is busy or the key’s quota is used up. Try again in a minute.'
+      : `Gemini answered ${status}: ${msg}`);
+    e.status = status; e.keyProblem = keyProblem;
+    return e;
   }
 
   /* The newest stable Flash model the key can use (falls back to previews, then any Gemini model). */
@@ -139,5 +143,54 @@
     return { model, cats };
   }
 
-  root.CEND_GEMINI = { pickModel, listModels, rank, suggestLinks, classifyRemarks, CATS };
+  /* A chat turn, streamed: `system` holds the instructions and the data, `history` the conversation
+     [{role:'user'|'model', text}]. onText(fullTextSoFar) is called as the answer arrives. */
+  async function chatStream(sec, o) {
+    let model = await modelFor(sec);
+    const body = {
+      systemInstruction: { parts: [{ text: o.system }] },
+      contents: o.history.map((m) => ({ role: m.role === 'user' ? 'user' : 'model', parts: [{ text: m.text }] })),
+      generationConfig: { temperature: 0.3, maxOutputTokens: 8192 },
+    };
+    for (let attempt = 0; ; attempt++) {
+      let r;
+      try {
+        r = await fetch(`${BASE}/models/${encodeURIComponent(model)}:streamGenerateContent?alt=sse`, {
+          method: 'POST', signal: o.signal, cache: 'no-store',
+          headers: { 'x-goog-api-key': sec.gemini_key, 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+        });
+      } catch (e) {
+        if (e.name === 'AbortError') throw e;
+        throw new Error('Gemini could not be reached from this network.');
+      }
+      if (!r.ok) {
+        const txt = await r.text(); let j = null; try { j = JSON.parse(txt); } catch (e) { /* not JSON */ }
+        if (r.status === 404 && attempt === 0) { picked = null; model = await pickModel(sec.gemini_key); continue; }   // saved model retired
+        throw apiErr(r.status, j, txt);
+      }
+      const reader = r.body.getReader(), dec = new TextDecoder();
+      let buf = '', text = '', finish = null, blocked = null;
+      const take = (line) => {
+        if (!line.startsWith('data:')) return;
+        const payload = line.slice(5).trim(); if (!payload || payload === '[DONE]') return;
+        let j; try { j = JSON.parse(payload); } catch (e) { return; }
+        if (j.promptFeedback && j.promptFeedback.blockReason) blocked = j.promptFeedback.blockReason;
+        const c = (j.candidates || [])[0]; if (!c) return;
+        const t = ((c.content && c.content.parts) || []).filter((p) => !p.thought).map((p) => p.text || '').join('');
+        if (t) { text += t; o.onText(text); }
+        if (c.finishReason) finish = c.finishReason;
+      };
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        let i; while ((i = buf.indexOf('\n')) >= 0) { take(buf.slice(0, i).replace(/\r$/, '')); buf = buf.slice(i + 1); }
+      }
+      if (buf) take(buf.trim());
+      if (!text) throw new Error(blocked ? `Gemini declined to answer (${blocked}).` : `Gemini gave no answer${finish ? ` (${finish})` : ''}.`);
+      return { model, text, finish };
+    }
+  }
+
+  root.CEND_GEMINI = { pickModel, listModels, rank, suggestLinks, classifyRemarks, chatStream, CATS };
 })(window);

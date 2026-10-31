@@ -4,6 +4,8 @@ The Resident Engineer Progress View for HLEP · SJ Chenderoh electrical works: a
 
 ## What you can do on the website
 
+- **Lookahead picker** (top of the page): switch to any lookahead on record, from CW18 onwards. Every tab then shows the dashboard as it stood that week: the plan, slips, constraints, plan reliability, and the site checks and added activities as they were on that week's last day. A banner shows you are looking back, editing is off, and **Back to latest** returns to the current week.
+- **Ask the dashboard** (round bot button, bottom right): a chat assistant that answers from all the dashboard data, in English or Malay: what's late and why, what changed between lookahead weeks, what to chase, any past week, the Generator U1 reference data, and ready-to-paste WhatsApp or email updates. Activity numbers in an answer open the activity panel, and every answer has a Copy button. It can't change anything. It uses the Gemini key in Settings and keeps the conversation only in that browser tab.
 - **Today's activities** tab: lists what the latest lookahead plans for the day, with one-tap **Done / Pending / Hold** site checks. It also lists what was planned earlier in the fortnight and still needs a check, shows the two-week chart, and has a search to find any activity.
 - **Activity panel**: open any activity (from Today, the search, the runway or the chase list) to record a site check with a date and note, or clear it. The panel also shows the plan history across lookaheads.
 - **Add activity**: add work that isn't in the ANDRITZ lookaheads, such as another contractor's scope. You can edit it, mark it done or delete it later.
@@ -17,6 +19,7 @@ The Resident Engineer Progress View for HLEP · SJ Chenderoh electrical works: a
 3. Each row is linked to the activity it continues, by section, component heading (R01–R08, Rotor Body / Fan / Assembly) and wording. A remark on a component heading (for example "Ready for Transportation") is copied to every row under it, marked "(whole component)".
 4. **Gemini** (if a key is set in Settings) checks the rows that didn't match word for word, in case an activity was renamed, and sorts new remarks into constraint types. Gemini only suggests; a confident rename is pre-linked and marked "linked by Gemini".
 5. On the review screen you can link any row to a tracked activity, add it as new, or leave it out, and set the type of each new remark. **Save** writes the lookahead for everyone. Uploading the same week again replaces it.
+6. **Sections not tracked** lists any other section of an electrical sheet (for example new FIRE FIGHTING sections such as Unit 4 fire alarm or GT4 deluge). **Track this section** adds its rows, and the choice is remembered for later uploads.
 
 The reader was checked by replaying the CW43–44 workbook onto the CW42 data: the result matched the earlier tracker exactly (103 rows continued, 13 new, every slip, rollover, status, constraint and plan-reliability figure the same).
 
@@ -59,6 +62,8 @@ The token is a fine-grained personal access token with only **Contents: Read and
 | `app/lookahead.js` | Turns a lookahead workbook into rows and links them to tracked activities |
 | `app/gemini.js` | Asks Gemini about renamed activities and new remarks |
 | `app/upload.js` | The upload and review screens |
+| `app/chatdata.js` | What the assistant reads: its instructions and all the dashboard data as compact text |
+| `app/chat.js` | The assistant: bot button, chat panel, answers with activity links |
 | `tools/build.mjs` | Builds `index.html` from the dashboard page and the app files; needs `CEND_KEY` |
 | `tools/seal.mjs` | Encrypts or decrypts a data file; needs `CEND_KEY` |
 | `tools/setkey.mjs` | Sets or changes the password and writes `keywrap.json` |

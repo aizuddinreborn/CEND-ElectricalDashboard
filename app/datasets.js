@@ -100,5 +100,47 @@
     };
   }
 
-  root.CEND_DATA = { build, isoWeek, localToday, pkgKeyFor, LOOK_ORDER, LOOK_CON };
+  /* The saved state as it stood at lookahead `cw`: later lookaheads taken out, and site checks and
+     activities added on the website as they were on `today` (the last day before the next lookahead). */
+  function asOf(state, cw, today) {
+    const m = state.model;
+    const looks = m.meta.lookaheads.filter((l) => l.cw <= cw);
+    if (!looks.length) throw new Error(`There is no lookahead for CW${cw}.`);
+    const acts = [];
+    for (const a of m.acts) {
+      const o = a.o.filter((x) => x[0] <= cw);
+      if (!o.length) continue;
+      const b = { ...a, o };
+      if (b.done && !(b.done.date && b.done.date <= today)) delete b.done;
+      acts.push(b);
+    }
+    const site = {};
+    for (const [k, v] of Object.entries(state.site_checks || {})) {
+      if (!v) continue;
+      const recs = [v, ...(Array.isArray(v.history) ? v.history : [])].filter((r) => r && ISO_RX.test(r.checked || '') && r.checked <= today);
+      if (!recs.length) continue;
+      const r = recs.sort((x, y) => y.checked.localeCompare(x.checked) || String(y.at || '').localeCompare(String(x.at || '')))[0];
+      site[k] = { ...v, status: r.status, checked: r.checked, note: r.note || '', by_name: r.by_name || null, at: r.at || null, history: [] };
+    }
+    const custom = {};
+    for (const [id, v] of Object.entries(state.custom_acts || {})) {
+      if (!v) continue;
+      const made = String(v.at || '').slice(0, 10);
+      if (ISO_RX.test(made) && made > today) continue;
+      let start = v.start, finish = v.finish, replans = Number(v.replans) || 0;
+      for (const ch of Array.isArray(v.history) ? v.history : []) {      // newest first: undo date changes made after `today`
+        if (String(ch.at || '').slice(0, 10) <= today) break;
+        if (ch.finish && ch.finish !== finish) replans = Math.max(0, replans - 1);
+        if (ISO_RX.test(ch.start || '')) start = ch.start;
+        if (ISO_RX.test(ch.finish || '')) finish = ch.finish;
+      }
+      let status = v.status, done_date = v.done_date;
+      if (status === 'done' && !(ISO_RX.test(done_date || '') && done_date <= today)) { status = 'planned'; done_date = ''; }
+      custom[id] = { ...v, start, finish, replans, status, done_date };
+    }
+    const log = (state.log || []).filter((x) => String(x.at || '').slice(0, 10) <= today);
+    return { ...state, model: { ...m, meta: { ...m.meta, lookaheads: looks }, acts }, site_checks: site, custom_acts: custom, log, updated_at: `${today}T23:59:00+08:00`, updated_by: '' };
+  }
+
+  root.CEND_DATA = { build, asOf, isoWeek, localToday, pkgKeyFor, LOOK_ORDER, LOOK_CON };
 })(typeof window !== 'undefined' ? window : globalThis);

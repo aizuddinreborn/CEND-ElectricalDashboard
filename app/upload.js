@@ -31,7 +31,7 @@
       body: [drop, msg,
         h('div', 'cend-sec', h('h3', null, 'What is read'),
           h('ul', 'cend-ul',
-            h('li', null, h('b', null, 'EPS, GEN, AUTOMATION, PH Crane U4'), ' sheets, and the electrical rooms and fire-water pump electrical work on ', h('b', null, 'FIRE FIGHTING'), '. Other sheets are left out.'),
+            h('li', null, h('b', null, 'EPS, GEN, AUTOMATION, PH Crane U4'), ' sheets, and the electrical rooms and fire-water pump electrical work on ', h('b', null, 'FIRE FIGHTING'), '. Other sheets are left out. Other sections of these sheets are listed on the review screen, so you can choose to track them.'),
             h('li', null, 'Each row is linked to the activity it continues, so slip, rollovers and plan reliability carry on from the earlier lookaheads.'),
             h('li', null, sec.gemini_key ? 'Gemini checks the rows that don’t match word for word (renamed activities) and sorts new remarks into constraint types. You confirm everything.' : 'Rows that don’t match word for word are listed for you to link. Add a Gemini key in Settings to get suggestions.'),
             h('li', null, 'Uploading the same week again replaces it.')))],
@@ -50,7 +50,7 @@
     try {
       if (!/\.xlsx$/i.test(file.name)) throw new Error('Choose the .xlsx file (Excel Workbook). An older .xls file must be saved as .xlsx first.');
       const sheets = await window.CEND_XLSX.read(await file.arrayBuffer());
-      parsed = L.parse(sheets, file.name);
+      parsed = L.parse(sheets, file.name, { secs: UI.state().model.meta.secs || {} });
       if (parsed.problems.length) throw new Error(parsed.problems.join(' '));
       if (!parsed.packages.some((p) => p.rows.length)) throw new Error('No electrical activities were found in this workbook.');
     } catch (e) {
@@ -61,20 +61,43 @@
     const model = UI.clone(UI.state().model);
     const plan = L.match(model, parsed);
     plan.rows.forEach((r, i) => { r.i = i; r.orig = r.match; r.origHow = r.how; });
-    const seen = new Set(); for (const a of model.acts) for (const o of a.o) for (const t of o[2]) seen.add(t);
-    const rc = model.remark_cats || {};
-    const remarks = [...new Set(plan.rows.flatMap((r) => r.remarks))].filter((t) => !seen.has(t) && !Object.prototype.hasOwnProperty.call(rc, t))
-      .map((t) => ({ text: t, rule: window.CEND_MODEL.categorise(t), cat: window.CEND_MODEL.categorise(t), ai: false, touched: false }));
     const latest = Math.max(...model.meta.lookaheads.map((l) => l.cw));
-    CTX = { file, parsed, plan, model, remarks, latest, panel, ai: { state: 'idle' }, open: {}, saving: false };
+    CTX = { file, parsed, plan, model, remarks: [], latest, panel, ai: { state: 'idle' }, open: {}, saving: false, secs: {} };
+    collectRemarks(CTX);
     render();
     runAI(CTX);
+  }
+
+  /* New remarks (never seen in an earlier lookahead) on the rows being saved; keeps choices already made. */
+  function collectRemarks(ctx) {
+    const seen = new Set(); for (const a of ctx.model.acts) for (const o of a.o) for (const t of o[2]) seen.add(t);
+    const rc = ctx.model.remark_cats || {}, have = new Set(ctx.remarks.map((x) => x.text));
+    for (const t of new Set(ctx.plan.rows.filter((r) => !r.out).flatMap((r) => r.remarks))) {
+      if (seen.has(t) || have.has(t) || Object.prototype.hasOwnProperty.call(rc, t)) continue;
+      const rule = window.CEND_MODEL.categorise(t);
+      ctx.remarks.push({ text: t, rule, cat: rule, ai: false, touched: false });
+    }
+  }
+  /* Track (or stop tracking) a section the rules leave out; remembered for later uploads when saved. */
+  function trackSec(ctx, key, on) {
+    const rows = ctx.plan.rows.filter((r) => r.secKey === key);
+    if (!rows.length) return;
+    if (on) {
+      window.CEND_LOOK.matchRows(ctx.model, ctx.plan, rows);
+      rows.forEach((r) => { r.orig = r.match; r.origHow = r.how; });
+      ctx.secs[key] = { track: true, name: rows[0].sec };
+      collectRemarks(ctx);
+    } else {
+      rows.forEach((r) => Object.assign(r, { out: true, skip: true, match: null, how: null, suggest: null }));
+      delete ctx.secs[key];
+    }
+    render();
   }
 
   // ---------------------------------------------------------------- Gemini
   async function runAI(ctx) {
     const sec = window.CEND_STORE.secrets() || {}, G = window.CEND_GEMINI;
-    const newRows = ctx.plan.rows.filter((r) => r.match == null);
+    const newRows = ctx.plan.rows.filter((r) => r.match == null && !r.out);
     const uncat = ctx.remarks.filter((x) => !x.rule);
     if (!newRows.length && !uncat.length) { ctx.ai = { state: 'none' }; return render(); }
     if (!sec.gemini_key || !G) { ctx.ai = { state: 'off' }; return render(); }
@@ -166,16 +189,22 @@
       tile('Rows read', live.length, [...byP].map(([p, n]) => `${UI.pkName(p)} ${n}`).join(' · ') || 'none'),
       tile('Continue tracked activities', nLink, `${live.filter((r) => r.how === 'same wording').length} same wording`),
       tile('New activities', nNew, nNew ? 'check below' : 'none', nNew ? 'is-new' : ''),
-      tile('Rows left out', rows.length - live.length, `${parsed.skipped.length} sheets not read`)));
+      tile('Rows left out', rows.length - live.length, `${rows.filter((r) => r.out).length} in sections not tracked · ${plural(parsed.skipped.length, 'sheet')} not read`)));
     // AI line
     out.push(aiLine(ctx));
     // new rows
-    const newRows = live.filter((r) => r.match == null).concat(rows.filter((r) => r.skip));
+    const newRows = live.filter((r) => r.match == null).concat(rows.filter((r) => r.skip && !r.out));
     const linkedOdd = live.filter((r) => r.match != null && r.how !== 'same wording');
     if (newRows.length) out.push(section(ctx, 'new', 'New activities', `${plural(nNew, 'row')} didn’t match anything already tracked. If one is a renamed activity, link it so its history carries on.`, newRows.map((r) => rowCard(ctx, r)), true));
     if (linkedOdd.length) out.push(section(ctx, 'odd', 'Linked by similar wording', 'The wording changed a little since the last lookahead. Check each link is right.', linkedOdd.map((r) => rowCard(ctx, r)), true));
     // remarks
-    if (ctx.remarks.length) out.push(section(ctx, 'rem', 'New remarks', 'Remarks that sort into a type count as constraints on the dashboard while they stay in the latest lookahead.', ctx.remarks.map((x) => remarkCard(ctx, x)), true));
+    const rems = ctx.remarks.filter((x) => live.some((r) => r.remarks.includes(x.text)));
+    if (rems.length) out.push(section(ctx, 'rem', 'New remarks', 'Remarks that sort into a type count as constraints on the dashboard while they stay in the latest lookahead.', rems.map((x) => remarkCard(ctx, x)), true));
+    // sections of an electrical sheet that aren't tracked
+    const secG = new Map();
+    for (const r of rows) if (r.out || ctx.secs[r.secKey]) { if (!secG.has(r.secKey)) secG.set(r.secKey, []); secG.get(r.secKey).push(r); }
+    if (secG.size) out.push(section(ctx, 'secs', 'Sections not tracked', 'These sections of an electrical sheet are outside the tracked scope, so their rows are left out. Track a section to add its rows; the choice is remembered for the next uploads.',
+      [...secG].map(([key, rs]) => secCard(ctx, key, rs))));
     // same wording (collapsed)
     const same = live.filter((r) => r.how === 'same wording');
     if (same.length) out.push(details(ctx, 'same', `Same wording as before (${same.length})`, groupList(ctx, same)));
@@ -264,6 +293,18 @@
       h('div', 'cend-up-act', sel));
   }
 
+  function secCard(ctx, key, rs) {
+    const { h, plural } = window.CEND_UI;
+    const on = !!ctx.secs[key];
+    const dated = rs.filter((r) => r.days.length).length;
+    const b = h('button', { class: on ? 'cend-btn ghost' : 'cend-btn', type: 'button', onclick: () => trackSec(ctx, key, !on) }, on ? 'Stop tracking' : 'Track this section');
+    return h('div', `cend-up-row${on ? '' : ' is-skip'}`,
+      h('div', 'cend-up-main',
+        h('div', 'cend-up-t', h('b', null, rs[0].sec), on ? h('span', 'cend-tag is-new', 'tracked from now') : h('span', 'cend-tag', 'not tracked')),
+        h('div', 'cend-rw', `${rs[0].sheet} sheet · “${rs[0].secRaw}” · ${plural(rs.length, 'row')}, ${dated} with dates`),
+        h('div', 'cend-rem cend-small', rs.slice(0, 6).map((r) => r.text).join(' · ') + (rs.length > 6 ? ` · …and ${rs.length - 6} more` : ''))),
+      h('div', 'cend-up-act', b));
+  }
   function remarkCard(ctx, x) {
     const { h } = window.CEND_UI;
     const sel = h('select', { class: 'cend-in', 'aria-label': `Type of remark: ${x.text}` }, h('option', { value: '' }, 'Not a constraint'), CATS.map((c) => h('option', { value: c }, c)));
@@ -287,7 +328,7 @@
     if (!live.length) { msg.textContent = 'Every row is left out, so there is nothing to save.'; return; }
     const remark_cats = {};
     for (const x of ctx.remarks) if ((x.cat || null) !== (x.rule || null)) remark_cats[x.text] = x.cat || null;
-    const final = { cw: ctx.plan.cw, start: ctx.plan.start, end: ctx.plan.end, file: ctx.plan.file,
+    const final = { cw: ctx.plan.cw, start: ctx.plan.start, end: ctx.plan.end, file: ctx.plan.file, secs: { ...ctx.secs },
       rows: ctx.plan.rows.map((r) => ({ p: r.p, sec: r.sec, sub: r.sub, text: r.text, days: r.days, remarks: r.remarks, match: r.match, skip: !!r.skip })), remark_cats };
     const nNew = live.filter((r) => r.match == null).length;
     const wk = weekLabel(ctx.plan);

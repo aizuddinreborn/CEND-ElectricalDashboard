@@ -28,6 +28,9 @@ page = page.replace(/href="https:\/\/claude\.ai\/artifact\/W1J8eZVtE8sRwzXQcGoWP
 page = must(page, "'Synced ', when", "'Updated ', when");
 page = must(page, 'const stale = (now - at) / 36e5 > 14;', 'const stale = false;');
 page = page.replace(/box\.title = '[^']*';/, "box.title = 'When the progress data was last changed on this website.';");
+// looking back at an older lookahead: the page treats that week's last day as today, and the stamp says so
+page = must(page, "const todayISO = () => { const t = new Date();", "const todayISO = () => { const v = window.__CEND_TODAY && window.__CEND_TODAY(); if (v) return v; const t = new Date();");
+page = must(page, "function drawSync() {\n  const box = $('#sync');", "function drawSync() {\n  const box = $('#sync');\n  const past = window.__CEND_ASOF && window.__CEND_ASOF();\n  if (past) { box.classList.remove('dash-skeleton', 'is-stale'); box.title = past.title; fill(box, h('i', 'hx-sync-dot is-past'), h('span', 'hx-sync-t', past.line1), h('span', 'hx-sync-s', past.line2)); return; }");
 // each <script> of the dashboard runs in its own scope, as it does in Claude
 page = page.replace(/<script>([\s\S]*?)<\/script>/g, (m, body) => `<script>(() => {\n${body}\n})();</script>`);
 
@@ -36,7 +39,7 @@ const stat = {};
 const sdir = join(src, 'static');
 if (existsSync(sdir)) for (const f of readdirSync(sdir).filter((n) => n.endsWith('.json')).sort()) stat[f.replace(/\.json$/, '')] = JSON.parse(readFileSync(join(sdir, f), 'utf8'));
 const safe = (s) => s.replace(/<\/(script)/gi, '<\\/$1').replace(/<!--/g, '<\\!--');
-const app = ['model.js', 'datasets.js', 'store.js', 'xlsx-lite.js', 'lookahead.js', 'gemini.js', 'ui.js', 'upload.js'].filter((f) => existsSync(join(root, 'app', f)))
+const app = ['model.js', 'datasets.js', 'store.js', 'xlsx-lite.js', 'lookahead.js', 'gemini.js', 'ui.js', 'upload.js', 'chatdata.js', 'chat.js'].filter((f) => existsSync(join(root, 'app', f)))
   .map((f) => `<script>${safe(readFileSync(join(root, 'app', f), 'utf8'))}</script>`).join('\n');
 
 const shell = readFileSync(join(here, 'page-shell.html'), 'utf8');

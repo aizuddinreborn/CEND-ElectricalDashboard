@@ -6,6 +6,7 @@
   const ROOT = document.querySelector('.hx');
   if (!ROOT) return;
   let STATE = null, B = null, DAYSEL = null, CUR = null;   // CUR: what the panel shows
+  let VIEW = null;      // a past lookahead being looked at: {cw, start, end, today}; null = the latest
   const ui = window.CEND_UI = {};
 
   // ---------------------------------------------------------------- helpers
@@ -34,7 +35,9 @@
   const WD = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const fmt = (s) => { if (!s) return '–'; const d = new Date(D(s)); return `${d.getUTCDate()} ${MON[d.getUTCMonth()]}`; };
   const fmtW = (s) => { if (!s) return '–'; const d = new Date(D(s)); return `${WD[d.getUTCDay()]} ${d.getUTCDate()} ${MON[d.getUTCMonth()]}`; };
-  const today = () => DS.localToday();
+  const today = () => (VIEW ? VIEW.today : DS.localToday());
+  const wkTxt = (cw, end) => { const w2 = end ? DS.isoWeek(end) : cw + 1; return `CW${cw}${w2 !== cw ? `–${w2}` : ''}`; };
+  const latestCw = () => (STATE ? Math.max(...STATE.model.meta.lookaheads.map((l) => l.cw)) : null);
   const plural = (n, a, b) => `${n} ${n === 1 ? a : (b || a + 's')}`;
   const ISO_RX = /^\d{4}-\d{2}-\d{2}$/;
   const name = () => { try { return localStorage.getItem('cend-name') || ''; } catch (e) { return ''; } };
@@ -81,7 +84,8 @@
   // ---------------------------------------------------------------- data cycle
   function refresh() {
     if (!STATE) return;
-    try { B = DS.build(STATE, today()); }
+    if (VIEW && (VIEW.cw >= latestCw() || !STATE.model.meta.lookaheads.some((l) => l.cw === VIEW.cw))) setView(null);
+    try { B = DS.build(VIEW ? DS.asOf(STATE, VIEW.cw, VIEW.today) : STATE, today()); }
     catch (e) { console.error(e); dash.__fail('The saved progress data could not be read.'); return; }
     dash.__setData({ ...(window.__CEND_STATIC || {}), ...B.datasets });
     renderToday();
@@ -89,6 +93,7 @@
     const typing = ae && drawer.contains(ae) && (ae.tagName === 'TEXTAREA' || (ae.tagName === 'INPUT' && ae.type !== 'button'));
     if (CUR && CUR.type === 'act' && !drawer.hidden && !typing) rerenderDrawer();
     updateEditFlags();
+    renderWeek();
   }
   async function boot() {
     try { STATE = await S.loadState(); refresh(); }
@@ -100,6 +105,7 @@
 
   /* Save a change for everyone: shown at once here, then written to the repository. */
   async function commit(change, message) {
+    if (VIEW) { toast(`You’re looking back at ${wkTxt(VIEW.cw, VIEW.end)}. Go back to the latest week to make changes.`, 'bad'); return false; }
     if (!S.canEdit()) { openSettings('Editing is not set up on this site yet. Add a GitHub access token below (one time), then try again.'); return false; }
     if (!name()) { const ok = await askName(); if (!ok) return false; }
     const before = STATE;
@@ -165,8 +171,9 @@
   const btnPrev = h('button', { class: 'cend-icon-btn', type: 'button', 'aria-label': 'Previous day' }, '‹');
   const btnNext = h('button', { class: 'cend-icon-btn', type: 'button', 'aria-label': 'Next day' }, '›');
   const btnToday = h('button', { class: 'cend-chip', type: 'button' }, 'Today');
-  const btnAdd = h('button', { class: 'cend-btn', type: 'button' }, icon('plus'), 'Add activity');
-  const btnUp = h('button', { class: 'cend-btn ghost', type: 'button' }, icon('up'), 'Upload lookahead');
+  const btnAdd = h('button', { class: 'cend-btn cend-edit', type: 'button' }, icon('plus'), 'Add activity');
+  const btnUp = h('button', { class: 'cend-btn ghost cend-edit', type: 'button' }, icon('up'), 'Upload lookahead');
+  const dayEyebrow = h('div', 'hx-k', "Today's activities");
   const btnSet = h('button', { class: 'cend-btn ghost', type: 'button' }, icon('gear'), 'Settings');
   const q = h('input', { type: 'search', class: 'cend-search', placeholder: 'Find any activity to update, e.g. R05, battery, crane', 'aria-label': 'Find an activity', autocomplete: 'off' });
   const qres = h('div', { class: 'cend-qres', hidden: true });
@@ -177,7 +184,7 @@
   page.append(
     h('section', 'hx-panel hx-hud cend-head',
       h('div', 'cend-head-l',
-        h('div', 'hx-k', "Today's activities"),
+        dayEyebrow,
         h('div', 'cend-dayrow', btnPrev, dayTitle, btnNext, btnToday),
         daySub),
       h('div', 'cend-head-r', btnAdd, btnUp, btnSet),
@@ -189,7 +196,7 @@
       h('div', 'cend-legend', h('span', 'k-plan', h('i'), 'On plan'), h('span', 'k-late', h('i'), 'Late'), h('span', 'k-done', h('i'), 'Done'), h('span', 'k-hold', h('i'), 'On hold'), h('span', 'k-site', h('i'), 'Pending on site'))), ganttBox));
   btnPrev.addEventListener('click', () => { DAYSEL = addD(DAYSEL || today(), -1); renderToday(); });
   btnNext.addEventListener('click', () => { DAYSEL = addD(DAYSEL || today(), 1); renderToday(); });
-  btnToday.addEventListener('click', () => { DAYSEL = null; renderToday(); });
+  btnToday.addEventListener('click', () => { DAYSEL = VIEW ? VIEW.start : null; renderToday(); });
   btnAdd.addEventListener('click', () => openForm(null));
   btnUp.addEventListener('click', () => { if (window.CEND_UPLOAD) window.CEND_UPLOAD.open(); else toast('The lookahead reader did not load. Reload the page and try again.', 'bad'); });
   btnSet.addEventListener('click', () => openSettings());
@@ -228,22 +235,24 @@
   function renderToday() {
     if (!B) { dayTitle.textContent = 'Loading…'; return; }
     const t = today(), day = DAYSEL || t;
-    dayTitle.textContent = fmtW(day) + (day === t ? '' : '');
-    btnToday.hidden = day === t;
-    const M = B.meta;
+    const M = B.meta, WK = wkTxt(M.latest, M.latest_end);
+    dayTitle.textContent = fmtW(day);
+    dayEyebrow.textContent = VIEW ? `Activities in the ${WK} lookahead` : "Today's activities";
+    btnToday.textContent = VIEW ? 'First day' : 'Today';
+    btnToday.hidden = VIEW ? day === VIEW.start : day === t;
     const planned = B.items.filter((a) => a.days.includes(day));
     const order = B.order;
     planned.sort((x, y) => order.indexOf(x.p) - order.indexOf(y.p) || label(x).localeCompare(label(y)));
     const checked = planned.filter((a) => { const s = siteOf(a); return s && s.checked >= day; }).length;
     const late = planned.filter((a) => !closed(a) && (a.st === 'Slipping' || a.st === 'Overdue')).length;
     daySub.replaceChildren(h('span', null,
-      day === t ? 'Today · ' : day < t ? 'Past day · ' : 'Coming up · ',
-      `CW${M.latest}–${M.latest + 1} lookahead (${fmt(M.latest_start)} – ${fmt(M.latest_end)}) · `,
+      VIEW ? `As it stood on ${fmtW(t)} · ` : day === t ? 'Today · ' : day < t ? 'Past day · ' : 'Coming up · ',
+      `${WK} lookahead (${fmt(M.latest_start)} – ${fmt(M.latest_end)}) · `,
       h('b', null, plural(planned.length, 'activity', 'activities')), ' planned',
       planned.length ? [` · ${checked} checked on site`, late ? [' · ', h('span', 'n-amber', `${late} late`)] : ''] : ''));
     listBox.replaceChildren();
     if (!planned.length) listBox.append(h('div', 'cend-empty', D(day) < D(M.latest_start) || D(day) > D(M.latest_end)
-      ? `Nothing to show for ${fmtW(day)}: it is outside the CW${M.latest}–${M.latest + 1} lookahead. Upload the next lookahead to plan further ahead.`
+      ? `Nothing to show for ${fmtW(day)}: it is outside the ${WK} lookahead.${VIEW ? '' : ' Upload the next lookahead to plan further ahead.'}`
       : `Nothing is planned for ${fmtW(day)}.`));
     let lastP = null;
     for (const a of planned) {
@@ -263,7 +272,7 @@
   function renderGantt(day) {
     const M = B.meta, W0 = M.latest_start, n = Math.max(1, Math.round((D(M.latest_end) - D(W0)) / DAY) + 1);
     const rows = B.items.filter((a) => a.days.length).sort((x, y) => B.order.indexOf(x.p) - B.order.indexOf(y.p) || x.days[0].localeCompare(y.days[0]) || label(x).localeCompare(label(y)));
-    fortTitle.textContent = `CW${M.latest}–${M.latest + 1} · ${fmt(W0)} to ${fmt(M.latest_end)} · ${plural(rows.length, 'activity', 'activities')}`;
+    fortTitle.textContent = `${wkTxt(M.latest, M.latest_end)} · ${fmt(W0)} to ${fmt(M.latest_end)} · ${plural(rows.length, 'activity', 'activities')}`;
     const grid = h('div', 'cend-gantt', { style: `--n:${n}` });
     grid.style.setProperty('--n', n);
     const head = h('div', 'cend-gh', h('div', 'cend-glab', h('span', 'hx-k', 'Activity')));
@@ -333,12 +342,13 @@
   Object.assign(ui, { h, icon, toast, fmt, fmtW, pkName, plural, clone, name, today, D, addD });
   function rerenderDrawer() {
     if (!CUR) return;
-    if (CUR.type === 'act') { const a = B.byId.get(CUR.id) || B.byKey.get(CUR.key); if (a) renderAct(a); else closeDrawer(); }
+    if (CUR.type === 'act') { const a = B.byKey.get(CUR.key) || B.byId.get(CUR.id); if (a) renderAct(a); else closeDrawer(); }
   }
   ui.openAct = openAct;
   function openAct(id) {
     if (!B) return;
-    const a = B.byId.get(Number(id)) || B.byId.get(id); if (!a) return;
+    const a = B.byId.get(Number(id)) || B.byId.get(id) || B.byKey.get(id);
+    if (!a) { if (VIEW) toast(`That activity wasn’t in the plan yet at ${wkTxt(VIEW.cw, VIEW.end)}.`); return; }
     CUR = { type: 'act', id: a.id, key: a.k };
     renderAct(a); openDrawer();
   }
@@ -349,8 +359,8 @@
     const s = siteOf(a);
     dStatus.replaceChildren(pill(a), s ? h('span', 'cend-muted', ` lookahead says: ${LOOK_WORD[a.st] || a.st}`) : '', a.custom ? h('span', 'cend-muted', ' · added on the website') : '');
     dBody.replaceChildren();
-    // site check
-    dBody.append(siteBox(a));
+    // site check (read-only when looking back at an older week)
+    dBody.append(VIEW ? pastBox(a) : siteBox(a));
     // facts
     const f = a.custom
       ? [fact('Planned start', fmtW(a.ls)), fact('Planned finish', fmtW(a.lf)), fact('First planned finish', fmtW(a.bf)), fact('Slip', a.sl > 0 ? `+${a.sl} days` : 'none', a.sl >= 7), fact('Re-planned', a.r ? `${a.r}×` : 'no'), fact('Status', a.status === 'done' ? `Done ${fmt(a.d)}` : a.status === 'hold' ? 'On hold' : 'Planned')]
@@ -359,6 +369,7 @@
     dBody.append(h('div', 'cend-facts', f));
     if (a.custom) {
       if (a.remark) dBody.append(h('div', 'cend-sec', h('h3', null, 'Note'), h('p', null, a.remark)));
+      if (VIEW) return;
       const msg = h('span', 'cend-msg', { role: 'status' });
       const edit = h('button', { class: 'cend-btn', type: 'button', onclick: () => openForm(a) }, 'Edit');
       const done = a.status !== 'done' ? h('button', { class: 'cend-btn ghost', type: 'button', onclick: () => commit((st) => { const v = st.custom_acts && st.custom_acts[a.doc]; if (!v) return false; v.status = 'done'; v.done_date = today(); v.upd_at = new Date().toISOString(); v.upd_by = name(); }, `Activity done: ${a.n.slice(0, 80)}`) }, 'Mark done today') : null;
@@ -384,6 +395,15 @@
       if (!on) { on = true; btn.textContent = armedText; clearTimeout(t); t = setTimeout(() => { on = false; btn.textContent = text; }, 4000); return; }
       on = false; clearTimeout(t); btn.textContent = text; fn();
     });
+  }
+  function pastBox(a) {
+    const s = siteOf(a);
+    return h('div', 'cend-site is-past',
+      h('div', 'cend-site-h', h('h3', null, `As it stood on ${fmtW(VIEW.today)}`),
+        h('span', 'cend-muted', `You’re looking back at the ${wkTxt(VIEW.cw, VIEW.end)} lookahead, so this is read-only.`)),
+      s ? h('div', 'cend-site-rec', h('span', `cend-pill ${KIND[s.status]}`, h('i'), SITE_WORD[s.status]), ` checked ${fmtW(s.checked)}`, s.by_name ? h('span', 'cend-muted', ` by ${s.by_name}`) : '') : h('p', 'cend-muted', 'No site check had been recorded by then.'),
+      s && s.note ? h('p', 'cend-note', `“${s.note}”`) : '',
+      h('div', 'cend-actions', h('button', { class: 'cend-btn ghost', type: 'button', onclick: () => { const k = a.k; setView(null); refresh(); const b = B.byKey.get(k); if (b) openAct(b.id); } }, 'See it in the latest week')));
   }
   function siteBox(a) {
     const s = siteOf(a);
@@ -470,6 +490,8 @@
   }
   ui.openForm = openForm;
   ui.askName = () => askName();
+  ui.view = () => VIEW;
+  ui.setWeek = (cw) => { setView(cw); refresh(); };
   ui.showToday = (on) => showToday(on !== false);
 
   // ---------------------------------------------------------------- name prompt
@@ -536,8 +558,8 @@
           h('li', null, 'Generate, copy the token (starts with github_pat_) and paste it here.')),
         sec.set_at ? h('p', 'cend-muted cend-small', `Current token set ${fmt(sec.set_at.slice(0, 10))}${sec.set_by ? ` by ${sec.set_by}` : ''}.`) : '',
         h('div', 'cend-inline', tok, tokSave), tokMsg),
-      h('div', 'cend-sec', h('h3', null, 'Gemini (for reading lookaheads)'),
-        h('p', 'cend-muted', 'Used only when you upload a lookahead: Gemini suggests which new rows are renamed versions of existing activities, and sorts new remarks into constraint types. Get a key at aistudio.google.com → Get API key.'),
+      h('div', 'cend-sec', h('h3', null, 'Gemini (lookahead reading and the assistant)'),
+        h('p', 'cend-muted', 'Used when you upload a lookahead (Gemini suggests which new rows are renamed activities and sorts new remarks into constraint types) and by the assistant, the round bot button, which answers questions from the dashboard data. Get a key at aistudio.google.com → Get API key.'),
         sec.gemini_key ? h('p', 'cend-muted cend-small', `A key is set${sec.gemini_model ? `, model ${sec.gemini_model}` : ''}.`) : '',
         h('div', 'cend-inline', gk, gSave), gMsg),
       h('div', 'cend-sec', h('h3', null, 'Recent changes'),
@@ -545,6 +567,57 @@
     openDrawer();
   }
   ui.openSettings = openSettings;
+
+  // ---------------------------------------------------------------- lookahead week picker (whole dashboard as it stood)
+  const wkSel = h('select', { class: 'cend-wk-sel', 'aria-label': 'Lookahead week to show' });
+  const wkPrev = h('button', { class: 'cend-icon-btn', type: 'button', 'aria-label': 'Earlier lookahead', title: 'Earlier lookahead' }, '‹');
+  const wkNext = h('button', { class: 'cend-icon-btn', type: 'button', 'aria-label': 'Later lookahead', title: 'Later lookahead' }, '›');
+  const wkBox = h('div', { class: 'cend-wk', role: 'group', 'aria-label': 'Lookahead week' }, wkPrev, h('label', 'cend-wk-wrap', h('span', 'hx-k', 'Lookahead'), wkSel), wkNext);
+  const hxRight = document.querySelector('#top .hx-right');
+  if (hxRight) hxRight.prepend(wkBox);
+  const histBar = h('div', { class: 'cend-histbar', role: 'status', hidden: true });
+  const hxMain = document.querySelector('.hx-main');
+  if (hxMain) hxMain.prepend(histBar);
+  let wkKey = '';
+  const looksDesc = () => [...STATE.model.meta.lookaheads].sort((a, b) => b.cw - a.cw);
+  function setView(cw) {
+    const L = cw != null && STATE ? STATE.model.meta.lookaheads.find((l) => l.cw === Number(cw)) : null;
+    if (!L || L.cw >= latestCw()) VIEW = null;
+    else { const sun = addD(L.start, 6), real = DS.localToday(); VIEW = { cw: L.cw, start: L.start, end: L.end, today: sun < real ? sun : real }; }
+    DAYSEL = VIEW ? VIEW.start : null;
+    ROOT.classList.toggle('cend-hist', !!VIEW);
+  }
+  function go(cw) { setView(cw); refresh(); if (!VIEW) toast('Back to the latest lookahead.'); }
+  function renderWeek() {
+    if (!STATE) return;
+    const looks = looksDesc(), latest = looks[0].cw, cur = VIEW ? VIEW.cw : latest;
+    const key = looks.map((l) => l.cw).join(',');
+    if (key !== wkKey) {
+      wkKey = key;
+      wkSel.replaceChildren(...looks.map((l) => h('option', { value: String(l.cw) }, `${wkTxt(l.cw, l.end)} · ${fmt(l.start)}${l.cw === latest ? ' · latest' : ''}`)));
+    }
+    wkSel.value = String(cur);
+    const i = looks.findIndex((l) => l.cw === cur);
+    wkPrev.disabled = i >= looks.length - 1; wkNext.disabled = i <= 0;
+    wkBox.classList.toggle('is-hist', !!VIEW);
+    if (!VIEW) { histBar.hidden = true; return; }
+    histBar.hidden = false;
+    const wk = wkTxt(VIEW.cw, VIEW.end);
+    histBar.replaceChildren(h('i', 'cend-histbar-dot'),
+      h('div', 'cend-histbar-t',
+        h('span', 'cend-hb-wide', h('b', null, `Looking back: the ${wk} lookahead`), ` as it stood on ${fmtW(VIEW.today)}. Every tab shows that week; site checks and added activities are as they were then. Editing is off.`),
+        h('span', 'cend-hb-narrow', h('b', null, wk), ` as of ${fmtW(VIEW.today)} · read-only`)),
+      h('div', 'cend-histbar-a',
+        h('button', { class: 'cend-btn ghost', type: 'button', 'aria-label': 'Earlier lookahead', disabled: i >= looks.length - 1, onclick: () => go(looks[i + 1].cw) }, '‹', h('span', 'cend-hb-wide', ' Earlier')),
+        h('button', { class: 'cend-btn ghost', type: 'button', 'aria-label': 'Later lookahead', onclick: () => go(looks[i - 1].cw) }, h('span', 'cend-hb-wide', 'Later '), '›'),
+        h('button', { class: 'cend-btn', type: 'button', onclick: () => go(null) }, h('span', 'cend-hb-wide', `Back to latest (${wkTxt(latest, looks[0].end)})`), h('span', 'cend-hb-narrow', 'Latest'))));
+  }
+  wkSel.addEventListener('change', () => go(Number(wkSel.value)));
+  wkPrev.addEventListener('click', () => { const looks = looksDesc(), i = looks.findIndex((l) => l.cw === (VIEW ? VIEW.cw : looks[0].cw)); if (looks[i + 1]) go(looks[i + 1].cw); });
+  wkNext.addEventListener('click', () => { const looks = looksDesc(), i = looks.findIndex((l) => l.cw === (VIEW ? VIEW.cw : looks[0].cw)); if (i > 0) go(looks[i - 1].cw); });
+  // the dashboard page asks these when it draws: the day to treat as today, and the stamp to show when looking back
+  window.__CEND_TODAY = () => (VIEW ? VIEW.today : null);
+  window.__CEND_ASOF = () => (VIEW ? { title: 'You are looking back at an older lookahead. Use the Lookahead picker or the banner to return to the latest.', line1: `As of ${fmtW(VIEW.today)}`, line2: `${wkTxt(VIEW.cw, VIEW.end)} lookahead · ${plural(Object.keys(B ? B.site : {}).length, 'site check')}` } : null);
 
   // ---------------------------------------------------------------- hooks into the dashboard
   ROOT.addEventListener('click', (e) => {
