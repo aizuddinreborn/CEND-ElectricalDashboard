@@ -53,6 +53,7 @@
     gear: '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.2"/><path d="M8 1.8v1.8M8 12.4v1.8M1.8 8h1.8M12.4 8h1.8M3.6 3.6l1.3 1.3M11.1 11.1l1.3 1.3M12.4 3.6l-1.3 1.3M4.9 11.1l-1.3 1.3"/></svg>',
     cal: '<svg viewBox="0 0 16 16"><rect x="2.5" y="3.5" width="11" height="10" rx="2"/><path d="M2.5 6.8h11M5.5 2v3M10.5 2v3"/><path d="M5.2 9.6h1.4M7.3 9.6h1.4M9.4 9.6h1.4M5.2 11.6h1.4"/></svg>',
     search: '<svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.6"/><path d="M10.4 10.4l3.4 3.4"/></svg>',
+    cube: '<svg viewBox="0 0 16 16"><path d="M8 1.8l5.6 3.2v6L8 14.2 2.4 11V5z"/><path d="M2.4 5L8 8.2 13.6 5M8 8.2v6"/></svg>',
   };
   const icon = (k) => { const s = h('span', 'cend-ic'); s.innerHTML = IC[k]; return s; };   // constants only
 
@@ -97,7 +98,10 @@
   }
   async function boot() {
     try { STATE = await S.loadState(); refresh(); }
-    catch (e) { console.error(e); dash.__fail(String(e.message || e)); toast(String(e.message || e), 'bad'); }
+    catch (e) { console.error(e); dash.__fail(String(e.message || e)); toast(String(e.message || e), 'bad'); return; }
+    // a link straight to one activity (#act=<id>, from the 3D plant page) opens its panel
+    const m = /^#act=([\w-]+)$/.exec(location.hash || '');
+    if (m) { openAct(m[1]); try { history.replaceState(history.state, '', location.pathname + location.search); } catch (e) { /* ignore */ } }
   }
   ui.reload = boot;
   ui.state = () => STATE;
@@ -575,6 +579,9 @@
   const wkBox = h('div', { class: 'cend-wk', role: 'group', 'aria-label': 'Lookahead week' }, wkPrev, h('label', 'cend-wk-wrap', h('span', 'hx-k', 'Lookahead'), wkSel), wkNext);
   const hxRight = document.querySelector('#top .hx-right');
   if (hxRight) hxRight.prepend(wkBox);
+  // the 3D plant page, opened at the lookahead in view
+  const plantLink = h('a', { class: 'cend-btn ghost cend-3d', href: './plant/', title: 'The whole plant in 3D, each area coloured by this progress' }, icon('cube'), h('span', null, '3D plant'));
+  wkBox.after(plantLink);
   const histBar = h('div', { class: 'cend-histbar', role: 'status', hidden: true });
   const hxMain = document.querySelector('.hx-main');
   if (hxMain) hxMain.prepend(histBar);
@@ -600,6 +607,7 @@
     const i = looks.findIndex((l) => l.cw === cur);
     wkPrev.disabled = i >= looks.length - 1; wkNext.disabled = i <= 0;
     wkBox.classList.toggle('is-hist', !!VIEW);
+    plantLink.setAttribute('href', VIEW ? `./plant/#cw=${VIEW.cw}` : './plant/');
     if (!VIEW) { histBar.hidden = true; return; }
     histBar.hidden = false;
     const wk = wkTxt(VIEW.cw, VIEW.end);

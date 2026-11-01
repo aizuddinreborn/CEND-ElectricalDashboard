@@ -220,6 +220,8 @@ html.cend-lock .cend-gear, html.cend-lock .cend-out { display: none; }
 .hx.cend-hist .cend-row { grid-template-columns: minmax(0, 1fr); }
 .cend-site.is-past { border-color: rgba(255, 181, 71, .4); background: rgba(255, 181, 71, .05); }
 .cend-hb-narrow { display: none; }
+.hx .cend-3d { padding: 7px 12px; border-radius: 10px; font-size: 13px; text-decoration: none; white-space: nowrap; }
+.hx .cend-3d .cend-ic { color: var(--cyan); }
 @media (max-width: 640px) {
   .cend-wk { width: 100%; } .cend-wk-wrap { flex: 1; } .hx .cend-wk-sel { max-width: none; width: 100%; }
   .cend-hb-wide { display: none; } .cend-hb-narrow { display: inline; }
