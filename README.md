@@ -43,6 +43,8 @@ CEND_KEY='<content key>' node tools/build-plant.mjs
 
 The page reads the published `data/state.enc` when it opens, so it doesn't need a rebuild when progress changes. A save shows up there once GitHub Pages has published it, usually within a minute.
 
+**Undoing it.** To go back to the site as it was before the 3D plant (commit `53239f1`), revert [pull request #1](https://github.com/aizuddinreborn/CEND-ElectricalDashboard/pull/1) on GitHub: its **Revert** button opens a pull request that undoes only this change. Progress saved since is kept, because this change doesn't touch the data files. Don't reset `main` to that commit instead: that would also throw away the progress saved after it. To bring the 3D plant back, revert the revert.
+
 ## How it's protected
 
 Everything is encrypted with AES-256-GCM before it reaches this public repository:
