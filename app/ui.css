@@ -303,3 +303,10 @@ html.cend-lock .cend-bot { display: none; }
   .cend-chat-head { padding-top: max(12px, env(safe-area-inset-top)); }
   .cend-chat-foot { padding-bottom: max(10px, env(safe-area-inset-bottom)); }
 }
+
+/* rename an activity */
+.hx .cend-pen { appearance: none; display: inline-grid; place-items: center; width: 30px; height: 30px; margin-left: 8px; vertical-align: 3px; border-radius: 9px; border: 1px solid var(--line-2); background: none; color: var(--ink-2); cursor: pointer; }
+.hx .cend-pen:hover { border-color: var(--cyan); color: #fff; }
+.cend-pen .cend-ic, .cend-pen .cend-ic svg { width: 15px; height: 15px; }
+.cend-rename-box { display: grid; gap: 8px; }
+.hx .cend-rename { width: 100%; font-size: 17px; }

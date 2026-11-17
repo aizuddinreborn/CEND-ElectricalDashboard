@@ -45,6 +45,7 @@
   const clone = (o) => JSON.parse(JSON.stringify(o));
   const pkName = (p) => (B && B.pk[p] ? B.pk[p].name : p);
   const IC = {
+    pen: '<svg viewBox="0 0 16 16"><path d="M10.6 3.2l2.2 2.2-7.4 7.4-2.9.7.7-2.9z"/><path d="M9.3 4.5l2.2 2.2"/></svg>',
     done: '<svg viewBox="0 0 16 16"><path d="M3.5 8.4l2.9 2.9 6.1-6.6"/></svg>',
     pending: '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.6"/><path d="M8 5v3.3l2.2 1.4"/></svg>',
     hold: '<svg viewBox="0 0 16 16"><path d="M6 4.5v7M10 4.5v7"/></svg>',
@@ -359,7 +360,7 @@
   function fact(k, v, warn) { return h('div', 'cend-fact', h('span', 'hx-k', k), h('b', warn ? 'n-amber' : null, v)); }
   function renderAct(a) {
     dCrumb.replaceChildren(...[a.custom ? a.con : 'ANDRITZ (AHC)', pkName(a.p), a.sec, a.sub].filter(Boolean).map((t, i) => h('span', null, i ? ' · ' : '', t)));
-    dTitle.textContent = a.n;
+    titleView(a);
     const s = siteOf(a);
     dStatus.replaceChildren(pill(a), s ? h('span', 'cend-muted', ` lookahead says: ${LOOK_WORD[a.st] || a.st}`) : '', a.custom ? h('span', 'cend-muted', ' · added on the website') : '');
     dBody.replaceChildren();
@@ -436,6 +437,39 @@
 
   // ---------------------------------------------------------------- add / edit activity
   const CON_CATS = ['Material', 'Outage / LOTO', 'Crane & Lifting', 'Manpower', 'Approval', 'Dependency', 'Logistics'];
+  /* The activity name with a pencil to correct its wording. Lookahead activities keep the contractor's
+     wording as an alias, so later uploads still link to them. */
+  function titleView(a) {
+    const pen = VIEW ? '' : h('button', { class: 'cend-pen', type: 'button', title: 'Rename', 'aria-label': 'Rename this activity', onclick: () => titleEdit(a) }, icon('pen'));
+    dTitle.replaceChildren(h('span', null, a.n), pen);
+  }
+  function titleEdit(a) {
+    const inp = h('input', { class: 'cend-in cend-rename', type: 'text', maxlength: 300, 'aria-label': 'Activity name' });
+    inp.value = a.n;
+    const save = h('button', { class: 'cend-btn', type: 'button' }, 'Save name');
+    const cancel = h('button', { class: 'cend-btn ghost', type: 'button', onclick: () => titleView(a) }, 'Cancel');
+    const msg = h('span', 'cend-msg', { role: 'status' });
+    const go = async () => {
+      const nv = inp.value.replace(/\s+/g, ' ').trim();
+      if (!nv) { msg.textContent = 'The name can’t be empty.'; return; }
+      if (nv === a.n) { titleView(a); return; }
+      save.disabled = true;
+      const norm = (t) => String(t).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+      const ok = await commit((st) => {
+        if (a.custom) { const v = st.custom_acts && st.custom_acts[a.doc]; if (!v) return false; v.name = nv; v.upd_at = new Date().toISOString(); v.upd_by = name(); return; }
+        const m = st.model.acts.find((x) => x.k === a.k); if (!m) return false;
+        const al = (m.al || []).filter((t) => norm(t) !== norm(nv));
+        if (!al.some((t) => norm(t) === norm(m.n))) al.push(m.n);
+        m.al = al; m.n = nv;
+      }, `Renamed: ${a.n.slice(0, 70)} → ${nv.slice(0, 70)}`);
+      if (!ok) { save.disabled = false; return; }
+      const b = B.byKey.get(a.k); if (b && CUR && CUR.key === a.k) titleView(b);
+    };
+    save.addEventListener('click', go);
+    inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); go(); } if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); titleView(a); } });
+    dTitle.replaceChildren(h('div', 'cend-rename-box', inp, h('div', 'cend-actions', save, cancel, msg)));
+    inp.focus(); inp.select();
+  }
   function openForm(a) {
     if (!B) return;
     CUR = { type: 'form' };
